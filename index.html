@@ -317,6 +317,11 @@ function forgetPw(){
   try { localStorage.removeItem(AUTH); } catch (e) {}
   try { sessionStorage.removeItem('qrGuidePw'); } catch (e) {}
 }
+function dataBlob(uri){
+  const [head, b64] = uri.split(',', 2), bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], {type: head.slice(5).split(';')[0]});
+}
 async function unlock(pw, quiet, remember){
   const msg = t => { const el = $('unlockMsg'); if (el) el.textContent = t; };
   msg('Checking…');
@@ -334,8 +339,13 @@ async function unlock(pw, quiet, remember){
     return false;
   }
   if (UNLOCKED.size){ render(); return true; }
-  const media = res.media || {};
-  for (const s of res.payload.solves) for (const m of s.media || []) if (m.src.startsWith('locked/')) m.src = media[m.src.slice(7)] || '';
+  // browsers refuse to open data: URIs in a new tab (blank page), so the links get blob: URLs instead
+  const media = res.media || {}, blobs = {};
+  const blobUrl = uri => { try { return URL.createObjectURL(dataBlob(uri)); } catch (e) { return uri; } };
+  for (const s of res.payload.solves) for (const m of s.media || []) if (m.src.startsWith('locked/')){
+    const name = m.src.slice(7);
+    m.src = media[name] ? (blobs[name] = blobs[name] || blobUrl(media[name])) : '';
+  }
   // other years' records with their sentences about the locked years put back
   const restored = new Map((res.payload.restored || []).map(s => [key(s), s]));
   SOLVES = SOLVES.map(s => restored.get(key(s)) || s).concat(res.payload.solves)
