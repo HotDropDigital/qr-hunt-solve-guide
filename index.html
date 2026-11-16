@@ -130,7 +130,8 @@ figcaption{font-size:13px;line-height:1.45;color:var(--muted);padding:8px 10px}
 .unlock label{flex:1 0 100%;display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
 .unlock label input{flex:none;width:16px;height:16px;margin:0;accent-color:var(--accent)}
 #lockctl a{color:var(--muted)}
-.years .lock{font-size:.8em}
+.years .lock,nav.sub .lock{font-size:.8em}
+nav.sub + nav.sub{padding-top:0}
 .src{display:inline-block;font:600 11px/1.6 var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--chip);border-radius:999px;padding:0 8px;vertical-align:1px;white-space:nowrap}
 footer{max-width:920px;margin:0 auto;padding:0 16px 30px;color:var(--muted);font-size:13px}
 </style>
@@ -143,6 +144,7 @@ footer{max-width:920px;margin:0 auto;padding:0 16px 30px;color:var(--muted);font
     <input id="q" type="search" placeholder="Search clues, solves, places…" aria-label="Search">
   </div>
   <nav class="sub" id="sub"></nav>
+  <nav class="sub" id="sub2"></nav>
 </header>
 <main><article id="view"></article></main>
 <footer>Built from the team's solve records. Hunter names, team names and chat links have been removed; organizers and sponsors are named because they are public parts of the hunt. Nothing here is affiliated with the organizers. <span id="lockctl"></span></footer>
@@ -194,6 +196,7 @@ function route(){
   const h = decodeURIComponent(location.hash.slice(1));
   if (h.startsWith('playbook')) return {page:'playbook', anchor:h.split('/')[1] || null};
   if (h.startsWith('technique/')) return {page:'technique', tech:h.slice(10)};
+  if (h === 'qr') return {page:'qr'};
   const pm = h.match(/^poems(?:\/(\d{4}))?$/);
   if (pm) return {page:'poems', year:pm[1] ? +pm[1] : null};
   const sm = h.match(/^side(?:\/(.+))?$/);
@@ -202,10 +205,16 @@ function route(){
   if (m) return {page:'year', year:+m[1], qr:m[2] ? +m[2] : null};
   return {page:'home'};
 }
-function yearsNav(cur){
-  $('years').innerHTML = YEARS.map(y => `<a href="#${y}" class="${cur===y?'on':''}">${y}${isLocked(y) ? ' <span class="lock" aria-label="locked">&#128274;</span>' : ''}</a>`).join('')
+// the three groups in the top bar: QR hunts (years, playbook), summer poem hunts, side quests
+function groupNav(cur){
+  $('years').innerHTML = `<a href="#qr" class="${cur==='qr'?'on':''}">QR hunts</a>`
     + (POEMS.length ? `<a href="#poems" class="${cur==='poems'?'on':''}">Poem hunts</a>` : '')
-    + (SIDE.length ? `<a href="#side" class="${cur==='side'?'on':''}">Side quests</a>` : '')
+    + (SIDE.length ? `<a href="#side" class="${cur==='side'?'on':''}">Side quests</a>` : '');
+}
+// first row under the QR group: overview, one link per year, the playbook
+function yearPills(cur){
+  return `<span class="crumb">QR hunts</span><a href="#qr" class="${cur==='qr'?'on':''}">Overview</a>`
+    + YEARS.map(y => `<a href="#${y}" class="${cur===y?'on':''}">${y}${isLocked(y) ? ' <span class="lock" aria-label="locked">&#128274;</span>' : ''}</a>`).join('')
     + `<a href="#playbook" class="${cur==='playbook'?'on':''}">Playbook</a>`;
 }
 function qrPills(year, qr){
@@ -378,16 +387,29 @@ function sideView(s){
   <nav class="pager">${pager(prev, 'prev', 'Newer')}${pager(next, 'next', 'Older')}</nav>
   <p class="hint"><kbd>←</kbd> <kbd>→</kbd> move between quests</p>`;
 }
-function homeView(){
+function techChips(){
   const techs = {};
   ALL().forEach(s => (s.techniques || []).forEach(t => techs[t] = (techs[t] || 0) + 1));
   const top = Object.entries(techs).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  return `<section><h2>Techniques</h2><div class="chips">${top.map(([t, n]) => `<a class="chip" href="#technique/${encodeURIComponent(t)}">${esc(t)} <small>${n}</small></a>`).join('')}</div></section>`;
+}
+const yearCards = () => `<div class="cards">${YEARS.map(y => { const n = byYear(y); return isLocked(y) ? `<a class="card" href="#${y}"><span class="big">${y} &#128274;</span><span class="tech">Season in progress · password needed</span></a>` : `<a class="card" href="#${y}"><span class="big">${y}</span><span class="tech">${plural(n.length, 'checkpoint')} · ${n.filter(s => s.status === 'confirmed').length} confirmed</span></a>`; }).join('')}</div>`;
+function homeView(){
+  const qrs = SOLVES.length;
+  return `<p class="eyebrow">Utah Treasure Hunts</p><h1>Past hunts, solved step by step</h1>
+  <p class="intro">Three kinds of hunt, each with its own section. Each solve page shows the clue as posted, the solve as a numbered path with the clue line each step interprets, the clue images, videos and photos, the official hints, the dead ends, and the mistakes and rabbit holes hunters ran into on the way.</p>
+  <section><div class="cards">
+    <a class="card" href="#qr"><span class="big">QR hunts</span><span class="tech">${YEARS[0]}-${YEARS[YEARS.length-1]} · ${plural(qrs, 'checkpoint')} · plaques, keypads and the organizers' playbook</span></a>
+    ${POEMS.length ? `<a class="card" href="#poems"><span class="big">Poem hunts</span><span class="tech">${POEMS[0].hunt_year}-${POEMS[POEMS.length-1].hunt_year} · ${plural(POEMS.length, 'chest')} · line-by-line solves and a guide to how the poems work</span></a>` : ''}
+    ${SIDE.length ? `<a class="card" href="#side"><span class="big">Side quests</span><span class="tech">${plural(SIDE.length, 'quest')} · ${SIDE.filter(s => s.answer).length} solved · clues, solves and answers already ruled out</span></a>` : ''}
+  </div></section>
+  ${techChips()}`;
+}
+function qrView(){
   return `<p class="eyebrow">Utah Treasure Hunts · QR code hunt</p><h1>Every past checkpoint, solved step by step</h1>
-  <p class="intro">Pick a year, then a checkpoint. Each page shows the clue as posted, the solve as a numbered path with the clue line each step interprets, where the plaque was, the clue images, videos and photos from the solve, the official hints, the dead ends, and the mistakes and rabbit holes hunters ran into on the way. The <a href="#playbook">playbook</a> distils the organizers' habits.</p>
-  <section><h2>Years</h2><div class="cards">${YEARS.map(y => { const n = byYear(y); return isLocked(y) ? `<a class="card" href="#${y}"><span class="big">${y} &#128274;</span><span class="tech">Season in progress · password needed</span></a>` : `<a class="card" href="#${y}"><span class="big">${y}</span><span class="tech">${plural(n.length, 'checkpoint')} · ${n.filter(s => s.status === 'confirmed').length} confirmed</span></a>`; }).join('')}</div></section>
-  ${POEMS.length ? `<section><h2>Summer poem hunts</h2><div class="cards"><a class="card" href="#poems"><span class="big">Poems</span><span class="tech">${POEMS[0].hunt_year}-${POEMS[POEMS.length-1].hunt_year} · ${plural(POEMS.length, 'chest')} · line-by-line solves and a guide to how the poems work</span></a></div></section>` : ''}
-  ${SIDE.length ? `<section><h2>Side quests</h2><div class="cards"><a class="card" href="#side"><span class="big">Side quests</span><span class="tech">${plural(SIDE.length, 'quest')} · ${SIDE.filter(s => s.answer).length} solved · clues, solves and answers already ruled out</span></a></div></section>` : ''}
-  <section><h2>Techniques</h2><div class="chips">${top.map(([t, n]) => `<a class="chip" href="#technique/${encodeURIComponent(t)}">${esc(t)} <small>${n}</small></a>`).join('')}</div></section>`;
+  <p class="intro">Pick a year, then a checkpoint. Each page shows the clue as posted, the solve as a numbered path with the clue line each step interprets, where the plaque was, the official hints, and the dead ends. The <a href="#playbook">playbook</a> distils the organizers' habits.</p>
+  <section><h2>Years</h2>${yearCards()}</section>
+  <section><h2>Playbook</h2><div class="cards"><a class="card" href="#playbook"><span class="big">Playbook</span><span class="tech">How the organizers build QR clues</span></a></div></section>`;
 }
 function yearView(y){
   const ys = byYear(y);
@@ -491,30 +513,32 @@ function playbookView(){
 function render(){
   const r = route(), view = $('view');
   $('q').value = '';
+  $('sub2').innerHTML = '';
   lockCtl();
   if (r.page === 'playbook'){
-    yearsNav('playbook'); $('sub').innerHTML = playbookToc(); view.innerHTML = playbookView();
+    groupNav('qr'); $('sub').innerHTML = yearPills('playbook'); $('sub2').innerHTML = playbookToc(); view.innerHTML = playbookView();
     const el = r.anchor && document.getElementById(r.anchor);
     if (el){ el.scrollIntoView(); return; }
   } else if (r.page === 'poems'){
     const p = r.year ? POEMS.find(x => x.hunt_year === r.year) : null;
-    yearsNav('poems'); $('sub').innerHTML = poemPills(p ? p.hunt_year : null); view.innerHTML = p ? poemView(p) : poemsView();
+    groupNav('poems'); $('sub').innerHTML = poemPills(p ? p.hunt_year : null); view.innerHTML = p ? poemView(p) : poemsView();
   } else if (r.page === 'side'){
     const s = r.id ? SIDE.find(x => x.id === r.id) : null;
-    yearsNav('side'); $('sub').innerHTML = sidePills(s ? s.id : null); view.innerHTML = s ? sideView(s) : sidesView();
-  } else if (r.page === 'technique'){ yearsNav(null); $('sub').innerHTML = ''; view.innerHTML = techniqueView(r.tech); }
-  else if (r.page === 'year' && isLocked(r.year)){ yearsNav(r.year); $('sub').innerHTML = ''; view.innerHTML = lockView(r.year); }
+    groupNav('side'); $('sub').innerHTML = sidePills(s ? s.id : null); view.innerHTML = s ? sideView(s) : sidesView();
+  } else if (r.page === 'technique'){ groupNav(null); $('sub').innerHTML = ''; view.innerHTML = techniqueView(r.tech); }
+  else if (r.page === 'qr'){ groupNav('qr'); $('sub').innerHTML = yearPills('qr'); view.innerHTML = qrView(); }
+  else if (r.page === 'year' && isLocked(r.year)){ groupNav('qr'); $('sub').innerHTML = yearPills(r.year); view.innerHTML = lockView(r.year); }
   else if (r.page === 'year'){
     const s = r.qr ? byYear(r.year).find(x => x.qr_number === r.qr) : null;
-    yearsNav(r.year); $('sub').innerHTML = qrPills(r.year, r.qr); view.innerHTML = s ? solveView(s) : yearView(r.year);
-  } else { yearsNav(null); $('sub').innerHTML = ''; view.innerHTML = homeView(); }
+    groupNav('qr'); $('sub').innerHTML = yearPills(r.year); $('sub2').innerHTML = qrPills(r.year, r.qr); view.innerHTML = s ? solveView(s) : yearView(r.year);
+  } else { groupNav(null); $('sub').innerHTML = ''; view.innerHTML = homeView(); }
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', render);
 $('q').addEventListener('input', e => {
   const q = e.target.value.trim().toLowerCase();
   if (!q){ render(); return; }
-  yearsNav(null); $('sub').innerHTML = ''; $('view').innerHTML = searchView(q);
+  groupNav(null); $('sub').innerHTML = ''; $('sub2').innerHTML = ''; $('view').innerHTML = searchView(q);
 });
 document.addEventListener('click', e => {
   const a = e.target.closest('a.stepref');
